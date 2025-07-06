@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Note Coach - Voice Notes with AI</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .note-input {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .note-textarea {
+            width: 100%;
+            min-height: 120px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 16px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        
+        .note-textarea:focus {
+            outline: none;
+            border-color: #007AFF;
+        }
+        
+        .voice-hint {
+            font-size: 14px;
+            color: #666;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .voice-icon {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .save-btn {
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .save-btn:hover {
+            background: #0056CC;
+        }
+        
+        .save-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .recent-notes {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .note-item {
+            border-bottom: 1px solid #f0f0f0;
+            padding: 15px 0;
+        }
+        
+        .note-item:last-child {
+            border-bottom: none;
+        }
+        
+        .note-content {
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        
+        .note-meta {
+            font-size: 12px;
+            color: #999;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .project-tag {
+            background: #E3F2FD;
+            color: #1976D2;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .coaching-btn {
+            background: #34C759;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📝 Note Coach</h1>
+        <p>Speak your thoughts, let AI organize and coach you</p>
+    </div>
+
+    <div class="note-input">
+        <textarea 
+            class="note-textarea" 
+            placeholder="Tap here and use your voice button on the keyboard to speak your thoughts..."
+            id="noteInput"
+        ></textarea>
+        
+        <div class="voice-hint">
+            <svg class="voice-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+            Use your keyboard's voice input (🎤) to speak directly into this text box
+        </div>
+        
+        <button class="save-btn" onclick="saveNote()" id="saveBtn">
+            Save & Analyze Note
+        </button>
+    </div>
+
+    <div class="recent-notes">
+        <h3>Recent Notes</h3>
+        <div id="notesList">
+            <!-- Notes will be populated here -->
+            <div class="note-item">
+                <div class="note-content">
+                    <em>Your notes will appear here after you save them...</em>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple client-side storage for MVP (will be replaced with Claude + Google Drive)
+        let notes = JSON.parse(localStorage.getItem('noteCoachNotes') || '[]');
+
+        function saveNote() {
+            const noteInput = document.getElementById('noteInput');
+            const content = noteInput.value.trim();
+            
+            if (!content) {
+                alert('Please enter some content for your note');
+                return;
+            }
+
+            // Disable button during save
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Analyzing...';
+
+            // TODO: Send to Claude for analysis
+            // For now, simulate the process
+            setTimeout(() => {
+                const note = {
+                    id: Date.now(),
+                    content: content,
+                    timestamp: new Date().toISOString(),
+                    project: detectProject(content), // Simple detection for demo
+                    tags: []
+                };
+
+                notes.unshift(note);
+                localStorage.setItem('noteCoachNotes', JSON.stringify(notes));
+                
+                noteInput.value = '';
+                renderNotes();
+                
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save & Analyze Note';
+            }, 1500);
+        }
+
+        function detectProject(content) {
+            // Simple keyword-based project detection for demo
+            const keywords = {
+                'fitness': ['workout', 'exercise', 'gym', 'running', 'training'],
+                'work': ['meeting', 'project', 'deadline', 'client', 'team'],
+                'personal': ['family', 'friend', 'home', 'weekend', 'vacation'],
+                'learning': ['study', 'learn', 'course', 'book', 'research']
+            };
+
+            const lowerContent = content.toLowerCase();
+            for (const [project, words] of Object.entries(keywords)) {
+                if (words.some(word => lowerContent.includes(word))) {
+                    return project;
+                }
+            }
+            return 'general';
+        }
+
+        function renderNotes() {
+            const notesList = document.getElementById('notesList');
+            
+            if (notes.length === 0) {
+                notesList.innerHTML = `
+                    <div class="note-item">
+                        <div class="note-content">
+                            <em>Your notes will appear here after you save them...</em>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            notesList.innerHTML = notes.map(note => `
+                <div class="note-item">
+                    <div class="note-content">${note.content}</div>
+                    <div class="note-meta">
+                        <span>
+                            ${new Date(note.timestamp).toLocaleDateString()} 
+                            ${new Date(note.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            <span class="project-tag">${note.project}</span>
+                        </span>
+                        <button class="coaching-btn" onclick="startCoaching('${note.project}')">
+                            Coach Me
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function startCoaching(project) {
+            // TODO: Integrate with Claude for Socratic questioning
+            alert(`Starting coaching session for "${project}" project...\n\nThis will integrate with Claude to ask thought-provoking questions about your ${project} notes.`);
+        }
+
+        // Enter key to save (Shift+Enter for new line)
+        document.getElementById('noteInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                saveNote();
+            }
+        });
+
+        // Load existing notes on page load
+        renderNotes();
+    </script>
+</body>
+</html>
