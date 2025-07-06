@@ -135,20 +135,19 @@
     <div class="note-input">
         <textarea 
             class="note-textarea" 
-            placeholder="Tap here and use your voice button on the keyboard to speak your thoughts..."
+            placeholder="Speak your thoughts or give me instructions like 'search for fitness notes' or 'show me how you've organized my notes' or 'start a coaching session'..."
             id="noteInput"
         ></textarea>
         
         <div class="voice-hint">
             <svg class="voice-icon" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
             </svg>
-            Use your keyboard's voice input (🎤) to speak directly into this text box
+            Use voice input (🎤) to speak instructions or notes. Try: "search fitness", "show my notes", "coach me on work project"
         </div>
         
-        <button class="save-btn" onclick="saveNote()" id="saveBtn">
-            Save & Analyze Note
+        <button class="save-btn" onclick="processInput()" id="saveBtn">
+            Process Input
         </button>
     </div>
 
@@ -165,61 +164,258 @@
     </div>
 
     <script>
-        // Simple client-side storage for MVP (will be replaced with Claude + Google Drive)
-        let notes = JSON.parse(localStorage.getItem('noteCoachNotes') || '[]');
+        let notes = [];
 
-        function saveNote() {
+        async function processInput() {
             const noteInput = document.getElementById('noteInput');
             const content = noteInput.value.trim();
             
             if (!content) {
-                alert('Please enter some content for your note');
+                alert('Please enter some content or instruction');
                 return;
             }
 
-            // Disable button during save
+            // Disable button during processing
             const saveBtn = document.getElementById('saveBtn');
             saveBtn.disabled = true;
-            saveBtn.textContent = 'Analyzing...';
+            saveBtn.textContent = 'Processing...';
 
-            // TODO: Send to Claude for analysis
-            // For now, simulate the process
-            setTimeout(() => {
-                const note = {
-                    id: Date.now(),
-                    content: content,
-                    timestamp: new Date().toISOString(),
-                    project: detectProject(content), // Simple detection for demo
-                    tags: []
-                };
-
-                notes.unshift(note);
-                localStorage.setItem('noteCoachNotes', JSON.stringify(notes));
+            try {
+                // Classify the input
+                const instruction = classifyInput(content);
+                
+                if (instruction.type === 'search') {
+                    await handleSearch(instruction.query);
+                } else if (instruction.type === 'show_organization') {
+                    await showOrganization();
+                } else if (instruction.type === 'start_coaching') {
+                    await handleCoaching(instruction.project);
+                } else if (instruction.type === 'show_notes') {
+                    await loadNotes();
+                } else {
+                    // Default to saving as note
+                    await saveNote(content);
+                }
                 
                 noteInput.value = '';
-                renderNotes();
-                
+            } catch (error) {
+                console.error('Error processing input:', error);
+                alert('Error processing your input. Please try again.');
+            } finally {
                 saveBtn.disabled = false;
-                saveBtn.textContent = 'Save & Analyze Note';
-            }, 1500);
+                saveBtn.textContent = 'Process Input';
+            }
         }
 
-        function detectProject(content) {
-            // Simple keyword-based project detection for demo
-            const keywords = {
-                'fitness': ['workout', 'exercise', 'gym', 'running', 'training'],
-                'work': ['meeting', 'project', 'deadline', 'client', 'team'],
-                'personal': ['family', 'friend', 'home', 'weekend', 'vacation'],
-                'learning': ['study', 'learn', 'course', 'book', 'research']
-            };
-
-            const lowerContent = content.toLowerCase();
-            for (const [project, words] of Object.entries(keywords)) {
-                if (words.some(word => lowerContent.includes(word))) {
-                    return project;
-                }
+        function classifyInput(content) {
+            const lower = content.toLowerCase();
+            
+            // Search instructions
+            if (lower.includes('search') || lower.includes('find')) {
+                const searchTerms = lower.replace(/search|find|for|me|my|notes?/g, '').trim();
+                return { type: 'search', query: searchTerms };
             }
-            return 'general';
+            
+            // Show organization/categorization
+            if (lower.includes('show') && (lower.includes('organize') || lower.includes('categor') || lower.includes('organization'))) {
+                return { type: 'show_organization' };
+            }
+            
+            // Show notes
+            if (lower.includes('show') && lower.includes('notes')) {
+                return { type: 'show_notes' };
+            }
+            
+            // Coaching instructions
+            if (lower.includes('coach') || lower.includes('coaching')) {
+                const projectMatch = lower.match(/coach.*?(?:on|about|for)\s+(\w+)/);
+                return { type: 'start_coaching', project: projectMatch ? projectMatch[1] : null };
+            }
+            
+            // Default to note
+            return { type: 'note', content: content };
+        }
+
+        async function saveNote(content) {
+            try {
+                const response = await fetch('/tools/save_note', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: content })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(`Note saved! Detected project: ${result.project_detected}`);
+                    await loadNotes();
+                } else {
+                    throw new Error(result.error || 'Failed to save note');
+                }
+            } catch (error) {
+                console.error('Error saving note:', error);
+                throw error;
+            }
+        }
+
+        async function handleSearch(query) {
+            try {
+                const response = await fetch('/tools/search_notes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+
+                const result = await response.json();
+                displaySearchResults(result);
+            } catch (error) {
+                console.error('Error searching notes:', error);
+                throw error;
+            }
+        }
+
+        async function showOrganization() {
+            try {
+                // Get all notes to analyze organization
+                const allNotes = await getAllNotes();
+                displayOrganization(allNotes);
+            } catch (error) {
+                console.error('Error showing organization:', error);
+                throw error;
+            }
+        }
+
+        async function getAllNotes() {
+            // For now, we'll get notes by searching for empty string (gets all)
+            const response = await fetch('/tools/search_notes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query: '' })
+            });
+            return await response.json();
+        }
+
+        async function handleCoaching(project) {
+            try {
+                const response = await fetch('/tools/start_coaching_session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ project_name: project || 'general' })
+                });
+
+                const result = await response.json();
+                displayCoachingSession(result);
+            } catch (error) {
+                console.error('Error starting coaching session:', error);
+                throw error;
+            }
+        }
+
+        async function loadNotes() {
+            try {
+                const result = await getAllNotes();
+                notes = result.results || [];
+                renderNotes();
+            } catch (error) {
+                console.error('Error loading notes:', error);
+                showMessage('Error loading notes');
+            }
+        }
+
+        function displaySearchResults(result) {
+            const notesList = document.getElementById('notesList');
+            if (result.results && result.results.length > 0) {
+                notesList.innerHTML = `
+                    <div class="note-item">
+                        <div class="note-content"><strong>Search Results for "${result.query}":</strong></div>
+                    </div>
+                    ${result.results.map(note => `
+                        <div class="note-item">
+                            <div class="note-content">${note.content}</div>
+                            <div class="note-meta">
+                                <span>
+                                    ${new Date(note.timestamp).toLocaleDateString()} 
+                                    ${new Date(note.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    <span class="project-tag">${note.project}</span>
+                                </span>
+                                <button class="coaching-btn" onclick="startCoaching('${note.project}')">
+                                    Coach Me
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+            } else {
+                notesList.innerHTML = `
+                    <div class="note-item">
+                        <div class="note-content">No results found for "${result.query}"</div>
+                    </div>
+                `;
+            }
+        }
+
+        function displayOrganization(result) {
+            const notesList = document.getElementById('notesList');
+            const notes = result.results || [];
+            
+            // Group notes by project
+            const projects = {};
+            notes.forEach(note => {
+                const project = note.project || 'general';
+                if (!projects[project]) {
+                    projects[project] = [];
+                }
+                projects[project].push(note);
+            });
+
+            const projectSummary = Object.entries(projects).map(([project, projectNotes]) => 
+                `<div class="note-item">
+                    <div class="note-content">
+                        <strong>${project.charAt(0).toUpperCase() + project.slice(1)}</strong> - ${projectNotes.length} notes
+                    </div>
+                    <div class="note-meta">
+                        <span>Latest: ${projectNotes.length > 0 ? new Date(projectNotes[0].timestamp).toLocaleDateString() : 'N/A'}</span>
+                        <button class="coaching-btn" onclick="startCoaching('${project}')">Coach Me</button>
+                    </div>
+                </div>`
+            ).join('');
+
+            notesList.innerHTML = `
+                <div class="note-item">
+                    <div class="note-content"><strong>How I've organized your notes:</strong></div>
+                </div>
+                ${projectSummary}
+                <div class="note-item">
+                    <div class="note-content">
+                        <strong>Total:</strong> ${notes.length} notes across ${Object.keys(projects).length} projects
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayCoachingSession(result) {
+            const notesList = document.getElementById('notesList');
+            notesList.innerHTML = `
+                <div class="note-item">
+                    <div class="note-content">
+                        <strong>Coaching Session Started</strong><br>
+                        ${result.coaching_prompt}
+                    </div>
+                </div>
+                <div class="note-item">
+                    <div class="note-content">
+                        <strong>Suggested Questions:</strong><br>
+                        ${result.suggested_questions.map(q => `• ${q}`).join('<br>')}
+                    </div>
+                </div>
+            `;
         }
 
         function renderNotes() {
@@ -254,20 +450,24 @@
         }
 
         function startCoaching(project) {
-            // TODO: Integrate with Claude for Socratic questioning
-            alert(`Starting coaching session for "${project}" project...\n\nThis will integrate with Claude to ask thought-provoking questions about your ${project} notes.`);
+            handleCoaching(project);
         }
 
-        // Enter key to save (Shift+Enter for new line)
+        function showMessage(message) {
+            // Simple message display - could be enhanced with toast notifications
+            console.log(message);
+        }
+
+        // Enter key to process (Shift+Enter for new line)
         document.getElementById('noteInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                saveNote();
+                processInput();
             }
         });
 
         // Load existing notes on page load
-        renderNotes();
+        loadNotes();
     </script>
 </body>
 </html>

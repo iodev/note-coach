@@ -159,19 +159,21 @@ app.post('/tools/get_project_context', (req, res) => {
 app.post('/tools/search_notes', (req, res) => {
   const { query, project_filter } = req.body;
   
-  if (!query) {
-    return res.status(400).json({ error: 'Search query is required' });
+  // Handle empty query to get all notes
+  let sql = `SELECT * FROM notes`;
+  let params = [];
+
+  if (query && query.trim()) {
+    sql += ` WHERE content LIKE ?`;
+    params.push(`%${query}%`);
   }
 
-  let sql = `SELECT * FROM notes WHERE content LIKE ?`;
-  let params = [`%${query}%`];
-
   if (project_filter) {
-    sql += ` AND project_detected = ?`;
+    sql += query && query.trim() ? ` AND project_detected = ?` : ` WHERE project_detected = ?`;
     params.push(project_filter);
   }
 
-  sql += ` ORDER BY timestamp DESC LIMIT 10`;
+  sql += ` ORDER BY timestamp DESC LIMIT 50`;
 
   db.all(sql, params, (err, rows) => {
     if (err) {
@@ -180,7 +182,7 @@ app.post('/tools/search_notes', (req, res) => {
     }
 
     res.json({
-      query,
+      query: query || '',
       project_filter,
       results: rows.map(row => ({
         id: row.id,
