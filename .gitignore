@@ -85,3 +85,7 @@ claude-tools/
 *.bak
 *.backup
 /oauth.secret.json
+
+
+# Workspace settings
+test-results/
